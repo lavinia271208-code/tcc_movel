@@ -37,6 +37,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_screenutil: ^5.9.3
   intl: ^0.20.2
+  shared_preferences: ^2.5.5
   #flutter_facebook_login:
   #  git: https://github.com/lequanghiep74/flutter_facebook_login
   #firebase_auth: ^5.5.1

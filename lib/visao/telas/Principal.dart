@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:login/visao/telas/TelaDeposito.dart';
-import 'package:login/visao/telas/TelaHome.dart';
-import 'package:login/visao/telas/TelaTransferencia.dart';
+import 'package:login/visao/telas/TelaSolicitaçao.dart';
+import 'package:login/visao/telas/TelaHorarios.dart';
+import 'package:login/visao/telas/TelaMeusAgendamentos.dart';
 
 class Principal extends StatefulWidget {
   @override
