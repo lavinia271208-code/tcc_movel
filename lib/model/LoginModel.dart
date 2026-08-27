@@ -1,10 +1,10 @@
 class LoginModel {
-  String usuario;
+  String email;
   String token;
   String dataHora;
 
   LoginModel({
-    required this.usuario,
+    required this.email,
     required this.token,
     required this.dataHora,
   });

@@ -2,17 +2,15 @@ import '../model/LoginModel.dart';
 
 class AuthService {
 
+  //simula a chamada de login à API (web service de autenticação)
   Future<LoginModel> realizarLogin(
       String usuario,
       String senha
-      ) async {
+      ) async{
 
-    await Future.delayed(
-      const Duration(seconds: 2),
-    );
-
+    //simula o retorno que viria do servidor (usuário autenticado + token)
     return LoginModel(
-      usuario: usuario,
+      email: usuario,
       token: "TOKEN_123456",
       dataHora: DateTime.now().toString(),
     );
