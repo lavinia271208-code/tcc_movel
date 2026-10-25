@@ -38,6 +38,9 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.1
+  dio: ^5.8.0+1
+  http: ^1.6.0
+  google_fonts: ^6.2.1
   #flutter_facebook_login:
   #  git: https://github.com/lequanghiep74/flutter_facebook_login
   #firebase_auth: ^5.5.1

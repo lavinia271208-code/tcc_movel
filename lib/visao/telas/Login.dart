@@ -1,14 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:login/visao/telas/Splash2.dart';
-import 'package:login/visao/estilos/EstilosBotoes.dart';
-import 'package:login/visao/estilos/EstilosTexto.dart';
 import 'package:login/visao/telas/Principal.dart';
-import 'package:login/visao/util/WidgetsUteis.dart';
-import '../../service/AuthService.dart';
+import 'package:login/controle/ControllerLogin.dart';
+
+// ---------------------------------------------------------------------------
+// Visual ORIGINAL do Login/Cadastro, isolado nesta tela.
+// O resto do app usa o tema novo (claro); aqui continuam o tema escuro e
+// os textos brancos de antes.
+// ---------------------------------------------------------------------------
+
+// Tema escuro original (antes ficava em Tema.dart como temaEscuro)
+ThemeData _temaOriginal() {
+  final baseTheme = ThemeData(
+    fontFamily: "Open Sans",
+  );
+  return baseTheme.copyWith(
+    brightness: Brightness.dark,
+    primaryColor: const Color(0xFFE5B0A3),
+    primaryColorLight: const Color(0xFFE5B0A3),
+    primaryColorDark: Colors.black,
+    highlightColor: Colors.white,
+  );
+}
+
+// Estilos de texto originais (antes ficavam em EstilosTexto.dart)
+class _EstiloLogin {
+  static const TextStyle formField = TextStyle(
+    fontSize: 18.0,
+    fontWeight: FontWeight.normal,
+    color: Colors.white,
+  );
+
+  static const TextStyle title = TextStyle(
+    fontSize: 34,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  );
+
+  static const TextStyle subTitle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    color: Colors.white,
+  );
+
+  static const TextStyle button = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.normal,
+    color: Colors.white,
+  );
+
+  static const TextStyle body = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    color: Colors.white,
+  );
+
+  // Borda fina branca dos campos
+  static const BorderSide bordaFina = BorderSide(color: Colors.white, width: 1.0);
+}
+
+// Linha horizontal fina e semitransparente (decorativa)
+Widget _linhaHorizontal() => Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: Container(
+    height: 1.0,
+    color: Colors.white.withOpacity(0.6),
+  ),
+);
 
 // Tela de Login/Cadastro do aplicativo.
 // É um StatefulWidget porque o conteúdo muda dinamicamente
@@ -40,8 +101,10 @@ class _LoginState extends State<Login> {
   final TextEditingController _passwordController = TextEditingController();
 
   // Controllers dos campos de texto da aba "Cadastrar"
+  final TextEditingController _newNameController = TextEditingController();
   final TextEditingController _newEmailController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _newPasswordConfirmController = TextEditingController();
 
   // Libera a memória usada pelos controllers quando o widget é destruído
   // (evita vazamento de memória)
@@ -49,8 +112,10 @@ class _LoginState extends State<Login> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _newNameController.dispose();
     _newEmailController.dispose();
     _newPasswordController.dispose();
+    _newPasswordConfirmController.dispose();
     super.dispose();
   }
 
@@ -93,42 +158,71 @@ class _LoginState extends State<Login> {
     // Ativa o indicador de carregamento
     setState(() => _carregando = true);
 
-    try {
-      // Chama o serviço de autenticação (faz uma
-      // simulação de requisição HTTP) passando email e senha
-      final authService = AuthService();
+    // Chama o controle de login (requisição para a API Laravel). Ele já
+    // salva o token no SharedPreferences. Retorna null se deu certo, ou a
+    // mensagem de erro (credenciais inválidas, sem conexão, etc.)
+    final String? erro = await CLogin.realizaLogin(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-      final loginModel = await authService.realizarLogin(
-        _emailController.text,
-        _passwordController.text,
-      );
+    // Verifica se o widget ainda está montado antes de mexer no estado
+    // (evita erro caso o usuário tenha saído da tela durante o await)
+    if (!mounted) return;
+    setState(() => _carregando = false);
 
-      // Salva os dados retornados pelo login (email, data/hora e o
-      // token de autenticação) localmente, no SharedPreferences,
-      // para serem usados depois em outras telas/requisições
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      //await prefs.setString('idUsuario', loginModel.id);
-      await prefs.setString('emailUsuario', loginModel.email);
-      await prefs.setString('dataHoraLogin', loginModel.dataHora);
-      await prefs.setString('tokenAutenticacao', loginModel.token);
-
-      // Verifica se o widget ainda está montado antes de mexer no estado
-      // (evita erro caso o usuário tenha saído da tela durante o await)
-      if (!mounted) return;
-      setState(() => _carregando = false);
-
-      // Login deu certo: segue para a Splash2 (que vai baixar os dados)
-      telaSplash2(context);
-
-    } catch (erro) {
-      // Se o login falhar (credenciais inválidas, erro de rede, etc.),
-      // desativa o carregamento e mostra o erro para o usuário
-      setState(() => _carregando = false);
-      if (!mounted) return;
+    if (erro != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro na autenticação: $erro')),
+        SnackBar(content: Text(erro)),
       );
+      return;
     }
+
+    // Login deu certo: segue para a Splash2 (que vai baixar os dados)
+    telaSplash2(context);
+  }
+
+  // Executa o processo de cadastro: valida os campos, cria a conta na API
+  // (que já devolve o token) e segue para a Splash2, igual ao login
+  Future<void> _processarCadastro(BuildContext context) async {
+    final String nome = _newNameController.text.trim();
+    final String email = _newEmailController.text.trim();
+    final String senha = _newPasswordController.text;
+    final String confirmacao = _newPasswordConfirmController.text;
+
+    String? mensagem;
+    if (nome.isEmpty || email.isEmpty || senha.isEmpty || confirmacao.isEmpty) {
+      mensagem = 'Por favor, preencha todos os campos.';
+    } else if (!email.contains('@')) {
+      mensagem = 'O e-mail deve conter um @!';
+    } else if (senha.length < 6) {
+      mensagem = 'A senha deve ter no mínimo 6 caracteres.';
+    } else if (senha != confirmacao) {
+      mensagem = 'As senhas não conferem.';
+    }
+
+    if (mensagem != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mensagem)),
+      );
+      return;
+    }
+
+    setState(() => _carregando = true);
+
+    final String? erro = await CLogin.criaLogin(nome, email, senha, confirmacao);
+
+    if (!mounted) return;
+    setState(() => _carregando = false);
+
+    if (erro != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(erro)),
+      );
+      return;
+    }
+
+    telaSplash2(context);
   }
 
   // Constrói o formulário da aba "Entrar" (login de quem já tem conta)
@@ -142,30 +236,27 @@ class _LoginState extends State<Login> {
 
           // Campo de e-mail com validação (usa TextFormField por isso)
           TextFormField(
-              style: TextStyle(color: Theme.of(context).highlightColor),
+              style: const TextStyle(color: Colors.white),
               controller: _emailController,
               decoration: InputDecoration(
                 hintText: Internacionalizacao.hintTextEmail,
-                hintStyle: EstilosTextosCustomizado.formField(context),
-                enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).highlightColor, width: 1.0)),
-                focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).highlightColor, width: 1.0)),
+                hintStyle: _EstiloLogin.formField,
+                enabledBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
+                focusedBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
                 prefixIcon: const Icon(Icons.email, color: Colors.white),
               ),
               // validação do email
               // retorna uma mensagem de erro (String) se o campo for inválido,
               // ou null se estiver tudo certo
-              validator: (value){
-                if(value == null || value.trim().isEmpty){
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
                   return 'Por favor, insira seu e-mail!';
                 }
-                if(!value.contains('@')){
+                if (!value.contains('@')) {
                   return 'O e-mail deve conter um @!';
                 }
                 return null;
-              }
-          ),
+              }),
           SizedBox(height: ScreenUtil().setHeight(50)),
 
           // Campo de senha (obscureText: true esconde os caracteres digitados)
@@ -177,9 +268,9 @@ class _LoginState extends State<Login> {
             controller: _passwordController,
             decoration: InputDecoration(
               hintText: Internacionalizacao.hintTextPassword,
-              hintStyle: EstilosTextosCustomizado.formField(context),
-              enabledBorder: UnderlineInputBorder(borderSide: EstilosBotoes().borderSideFino(context)),
-              focusedBorder: UnderlineInputBorder(borderSide: EstilosBotoes().borderSideFino(context)),
+              hintStyle: _EstiloLogin.formField,
+              enabledBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
+              focusedBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
               prefixIcon: const Icon(Icons.lock, color: Colors.white),
             ),
           ),
@@ -207,78 +298,92 @@ class _LoginState extends State<Login> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              WidgetsUteis().horizontalLine(),
-              Text('-', style: EstilosTextosCustomizado.body(context)),
-              WidgetsUteis().horizontalLine()
+              _linhaHorizontal(),
+              const Text('-', style: _EstiloLogin.body),
+              _linhaHorizontal(),
             ],
           ),
-          WidgetsUteis().espacoHorizontal15,
+          SizedBox(height: ScreenUtil().setHeight(15)),
         ],
       ),
     );
   }
 
+  // Decoração padrão dos campos da aba "Cadastrar"
+  InputDecoration _decoracaoCadastro(String dica, IconData icone) {
+    return InputDecoration(
+      hintText: dica,
+      hintStyle: _EstiloLogin.formField,
+      enabledBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
+      focusedBorder: const UnderlineInputBorder(borderSide: _EstiloLogin.bordaFina),
+      prefixIcon: Icon(icone, color: Colors.white),
+    );
+  }
+
   // Constrói o formulário da aba "Cadastrar" (criação de conta nova)
-  // Observação: diferente de _showEntrar, aqui não há validação nem
-  // chamada real de cadastro - o botão apenas navega para a Splash2
+  // Os dados são enviados para POST /api/cadastro (nome, e-mail, senha e
+  // confirmação da senha). Fica dentro de um scroll porque tem 4 campos.
   Widget _showCadastrar() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SizedBox(height: ScreenUtil().setHeight(30)),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(height: ScreenUtil().setHeight(20)),
 
-        // Campo de e-mail para o novo cadastro
-        TextField(
-          style: EstilosTextosCustomizado.formField(context),
-          controller: _newEmailController,
-          decoration: InputDecoration(
-            hintText: Internacionalizacao.hintTextNewEmail,
-            hintStyle: EstilosTextosCustomizado.formField(context),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary, width: 1.0),
+          // Campo de nome para o novo cadastro
+          TextField(
+            style: _EstiloLogin.formField,
+            controller: _newNameController,
+            textCapitalization: TextCapitalization.words,
+            decoration: _decoracaoCadastro(Internacionalizacao.hintTextNewName, Icons.person),
+          ),
+          SizedBox(height: ScreenUtil().setHeight(30)),
+
+          // Campo de e-mail para o novo cadastro
+          TextField(
+            style: _EstiloLogin.formField,
+            controller: _newEmailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: _decoracaoCadastro(Internacionalizacao.hintTextNewEmail, Icons.email),
+          ),
+          SizedBox(height: ScreenUtil().setHeight(30)),
+
+          // Campo de senha para o novo cadastro
+          TextField(
+            obscureText: true,
+            style: _EstiloLogin.formField,
+            controller: _newPasswordController,
+            decoration: _decoracaoCadastro(Internacionalizacao.hintTextNewPassword, Icons.lock),
+          ),
+          SizedBox(height: ScreenUtil().setHeight(30)),
+
+          // Campo de confirmação da senha
+          TextField(
+            obscureText: true,
+            style: _EstiloLogin.formField,
+            controller: _newPasswordConfirmController,
+            decoration: _decoracaoCadastro(Internacionalizacao.hintTextConfirmPassword, Icons.lock_outline),
+          ),
+          SizedBox(height: ScreenUtil().setHeight(50)),
+
+          // Botão de cadastro: enquanto _carregando for true, mostra um spinner
+          _carregando
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF7D4CC),
+              padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
             ),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary, width: 1.0),
+            onPressed: () => _processarCadastro(context),
+            child: Text(
+              Internacionalizacao.signUpMenuButton,
+              style: _EstiloLogin.button,
             ),
-            prefixIcon: const Icon(Icons.email, color: Colors.white),
           ),
-        ),
-        SizedBox(height: ScreenUtil().setHeight(50)),
-
-        // Campo de senha para o novo cadastro
-        TextField(
-          obscureText: true,
-          style: EstilosTextosCustomizado.formField(context),
-          controller: _newPasswordController,
-          decoration: InputDecoration(
-            hintText: Internacionalizacao.hintTextNewPassword,
-            hintStyle: EstilosTextosCustomizado.formField(context),
-            enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Theme.of(context).highlightColor, width: 1.0)),
-            focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Theme.of(context).highlightColor, width: 1.0)),
-            prefixIcon: const Icon(Icons.lock, color: Colors.white),
-          ),
-        ),
-        SizedBox(height: ScreenUtil().setHeight(80)),
-
-        // Botão de cadastro: hoje apenas leva direto para a Splash2,
-        // sem de fato criar uma conta nova via serviço/API
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFF7D4CC),
-            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-          ),
-          onPressed: () {
-            telaSplash2(context);
-          },
-          child: Text(
-            Internacionalizacao.signUpMenuButton,
-            style: EstilosTextosCustomizado.button(context),
-          ),
-        ),
-      ],
+          SizedBox(height: ScreenUtil().setHeight(30)),
+        ],
+      ),
     );
   }
 
@@ -296,9 +401,12 @@ class _LoginState extends State<Login> {
     // de forma proporcional em diferentes tamanhos de tela
     ScreenUtil.init(context, designSize: const Size(750, 1304));
 
-    return Scaffold(
-      // Faz a tela se ajustar quando o teclado aparece, evitando
-      // que o teclado cubra os campos de texto
+    // O Theme aplica o tema escuro original só nesta tela
+    return Theme(
+      data: _temaOriginal(),
+      child: Scaffold(
+        // Faz a tela se ajustar quando o teclado aparece, evitando
+        // que o teclado cubra os campos de texto
         resizeToAvoidBottomInset: true,
         body: Container(
           width: double.infinity,
@@ -312,7 +420,6 @@ class _LoginState extends State<Login> {
             child: SingleChildScrollView(
               child: Column(
                 children: <Widget>[
-
                   // Cabeçalho com o título e subtítulo da tela
                   // (ex: "Entre na sua conta" / "Digite seus dados para acessar")
                   SizedBox(
@@ -324,9 +431,9 @@ class _LoginState extends State<Login> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Text(Internacionalizacao.logoTitle,
-                                style: EstilosTextosCustomizado.title(context)),
+                                style: _EstiloLogin.title),
                             Text(Internacionalizacao.logoSubTitle,
-                                style: EstilosTextosCustomizado.subTitle(context)),
+                                style: _EstiloLogin.subTitle),
                           ],
                         )),
                   ),
@@ -344,20 +451,19 @@ class _LoginState extends State<Login> {
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: <Widget>[
-
                             // Botão "ACESSAR": muda o estado para exibir
                             // o formulário de login
                             OutlinedButton(
                               onPressed: () => setState(() => _alterarParaEntrar()),
                               child: Text(Internacionalizacao.signInMenuButton,
                                   style: _cadastrarActive
-                                      ? TextStyle(
+                                      ? const TextStyle(
                                       fontSize: 22,
-                                      color: Theme.of(context).highlightColor,
+                                      color: Colors.white,
                                       fontWeight: FontWeight.bold)
-                                      : TextStyle(
+                                      : const TextStyle(
                                       fontSize: 16,
-                                      color: Theme.of(context).highlightColor,
+                                      color: Colors.white,
                                       fontWeight: FontWeight.normal)),
                             ),
 
@@ -367,13 +473,13 @@ class _LoginState extends State<Login> {
                               onPressed: () => setState(() => _alterarParaCadastrar()),
                               child: Text(Internacionalizacao.signUpMenuButton,
                                   style: _entrarActive
-                                      ? TextStyle(
+                                      ? const TextStyle(
                                       fontSize: 22,
-                                      color: Theme.of(context).highlightColor,
+                                      color: Colors.white,
                                       fontWeight: FontWeight.bold)
-                                      : TextStyle(
+                                      : const TextStyle(
                                       fontSize: 16,
-                                      color: Theme.of(context).highlightColor,
+                                      color: Colors.white,
                                       fontWeight: FontWeight.normal)),
                             )
                           ],
@@ -396,7 +502,9 @@ class _LoginState extends State<Login> {
               ),
             ),
           ),
-        ));
+        ),
+      ),
+    );
   }
 
   // Ativa a aba "Cadastrar" (troca as flags de controle das abas)
@@ -421,6 +529,8 @@ class Internacionalizacao {
   static String signUpMenuButton = "CADASTRAR";
   static String hintTextEmail = "Email";
   static String hintTextPassword = "Senha";
+  static String hintTextNewName = "Seu nome";
   static String hintTextNewEmail = "Entre com seu Email";
   static String hintTextNewPassword = "Crie uma senha";
+  static String hintTextConfirmPassword = "Confirme a senha";
 }

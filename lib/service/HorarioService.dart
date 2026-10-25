@@ -1,36 +1,37 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:login/model/Objects/Agendamento.dart';
+import 'package:login/model/api/Sincroniza.dart';
+
 class HorarioService {
-  //horários indisponíveis (já ocupados) simulados por dia da semana
-  static const Map<String, List<String>> _horariosIndisponiveisPorDia = {
-    'Segunda-feira': ['13:00', '15:00'],
-    'Terça-feira': ['08:00', '09:00'],
-    'Quarta-feira': ['11:00', '16:00'],
-    'Quinta-feira': ['10:00'],
-    'Sexta-feira': ['13:00'],
-    'Sábado': ['08:00', '09:00', '10:00'],
-  };
+  // GET /api/horarios-disponiveis?data=YYYY-MM-DD&servico_id=1
+  // Resposta da API: { data: [ { hora: '08:00', ativo: true }, ... ] }
+  // Retorna a mesma forma que a tela já espera: [{ 'hora': '08:00', 'ativo': true }, ...]
+  Future<List<Map<String, dynamic>>> buscarHorarios({
+    required String token,
+    required DateTime data,
+    required int servicoId,
+  }) async {
+    final uri = Uri.parse('${Sincroniza.BASE_URL}/horarios-disponiveis').replace(
+      queryParameters: {
+        'data': Agendamento.formataDataParaApi(data),
+        'servico_id': servicoId.toString(),
+      },
+    );
 
-  static const List<String> _horariosBase = [
-    '08:00',
-    '09:00',
-    '10:00',
-    '11:00',
-    '13:00',
-    '14:00',
-    '15:00',
-    '16:00',
-  ];
+    final response = await http.get(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
-  //simula uma pequena espera, como se estivesse consultando um servidor
-  Future<List<Map<String, dynamic>>> buscarHorarios(String diaSemana) async {
-    await Future.delayed(const Duration(milliseconds: 800));
+    if (response.statusCode == 200) {
+      final List<dynamic> lista = jsonDecode(response.body)['data'];
+      return lista.cast<Map<String, dynamic>>();
+    }
 
-    final indisponiveis = _horariosIndisponiveisPorDia[diaSemana] ?? [];
-
-    return _horariosBase
-        .map((hora) => {
-      'hora': hora,
-      'ativo': !indisponiveis.contains(hora),
-    })
-        .toList();
+    throw Exception('Não foi possível carregar os horários disponíveis.');
   }
 }

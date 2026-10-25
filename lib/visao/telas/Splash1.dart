@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:login/controle/ControllerSplash.dart';
 import 'package:login/visao/util/WidgetsUteis.dart';
 import 'Login.dart';
 import 'Splash2.dart';
@@ -29,18 +29,17 @@ class _Splash1State extends State<Splash1> {
     // e só depois decide para qual tela navegar
     Future.delayed(Duration(seconds: 3), () async {
 
-      // Verifica se existe um token de autenticação salvo localmente
-      // de um login anterior (ou seja, se o usuário "já está logado")
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? token = prefs.getString('tokenAutenticacao');
+      // Verifica se existe um login salvo localmente de uma sessão anterior
+      // (ou seja, se o usuário "já está logado")
+      final bool logado = await CSplash.seLogado();
 
       // Garante que o widget ainda está na tela antes de navegar
       // (evita erro caso o usuário tenha saído do app durante a espera)
       if (!mounted) return;
 
-      if (token != null) {
-        // Se o token existir, vai para a Splash2 que simula o carregamento
-        // (ela vai baixar/atualizar os agendamentos do usuário)
+      if (logado) {
+        // Se houver login salvo, vai para a Splash2, que carrega os dados
+        // (ela vai baixar/atualizar os agendamentos do usuário na API)
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => Splash2()),
@@ -75,7 +74,7 @@ class _Splash1State extends State<Splash1> {
             Image.asset('assets/logo.png', //img logo
               width: 150,
             ),
-            Text('makeup studio', style: TextStyle(fontWeight: FontWeight.bold,
+            Text('Belle Studio', style: TextStyle(fontWeight: FontWeight.bold,
                 color: Colors.white, fontSize: 26),
             ),
             // Pequeno espaçamento vertical entre o texto e o spinner
