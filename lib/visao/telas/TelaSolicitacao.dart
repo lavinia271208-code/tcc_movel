@@ -12,7 +12,7 @@ import 'TelaHorarios.dart';
 
 // TELA DE SOLICITAÇÃO
 
-const String _numeroWhatsApp = '5537998072287';
+const String _numeroWhatsApp = '5537998717387';
 
 // Tem três modos:
 // - criação: chega da tela de Horários com [servico] e [dataHora] escolhidos.
