@@ -234,7 +234,7 @@ class _TelaTresState extends State<TelaTres> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appBarBelle(context, 'Meus agendamentos'),
+      appBar: appBarBelle(context, 'Meus agendamentos', comSair: true),
 
       // Três estados possíveis do corpo da tela:
       // carregando -> spinner; lista vazia -> mensagem;

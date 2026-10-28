@@ -343,7 +343,9 @@ class _TelaHomeState extends State<TelaUm> {
 
     return Scaffold(
       appBar: appBarBelle(
-          context, _modoRemarcar ? 'Remarcar horário' : 'Horários disponíveis'),
+          context, _modoRemarcar ? 'Remarcar horário' : 'Horários disponíveis',
+          // o botão de sair só aparece na aba principal (não ao remarcar)
+          comSair: !_modoRemarcar),
       body: Column(
         children: [
           Expanded(

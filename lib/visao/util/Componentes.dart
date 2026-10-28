@@ -2,10 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:login/visao/estilos/EstilosTexto.dart';
 import 'package:login/visao/estilos/Tema.dart';
+import 'package:login/visao/telas/TelaSaida.dart';
+
+// Pergunta se a cliente quer sair; se sim, abre a TelaSaida (que encerra a
+// sessão e mostra "Você saiu da conta"), limpando as telas anteriores.
+Future<void> sairDaConta(BuildContext context) async {
+  final confirmou = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Sair da conta'),
+      content: const Text('Deseja realmente sair?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: TextButton.styleFrom(foregroundColor: AppCores.perigo),
+          child: const Text('Sair'),
+        ),
+      ],
+    ),
+  );
+  if (confirmou != true || !context.mounted) return;
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (_) => const TelaSaida()),
+        (route) => false,
+  );
+}
 
 // Cabeçalho claro: logo redondo + título em serifada.
 // Mostra a seta de voltar automaticamente quando a tela foi "empurrada".
-AppBar appBarBelle(BuildContext context, String titulo) {
+// Com [comSair] = true, mostra o botão de sair da conta no canto direito.
+AppBar appBarBelle(BuildContext context, String titulo, {bool comSair = false}) {
   return AppBar(
     toolbarHeight: 68,
     backgroundColor: Colors.white,
@@ -14,6 +46,14 @@ AppBar appBarBelle(BuildContext context, String titulo) {
     scrolledUnderElevation: 0,
     shape: const Border(bottom: BorderSide(color: AppCores.borda)),
     iconTheme: const IconThemeData(color: AppCores.texto),
+    actions: [
+      if (comSair)
+        IconButton(
+          icon: const Icon(Icons.logout_rounded),
+          tooltip: 'Sair',
+          onPressed: () => sairDaConta(context),
+        ),
+    ],
     title: Row(
       children: [
         ClipOval(
